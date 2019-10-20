@@ -155,8 +155,7 @@ def get_movies_faceted(filters, page, movies_per_page):
     # pipeline.extend(...)
     pipeline.append(skip_stage)
     pipeline.append(limit_stage)
-    pipeline.append(facet_stage)
-    
+    pipeline.extend(facet_stage)
     try:
         movies = list(db.movies.aggregate(pipeline, allowDiskUse=True))[0]
         count = list(db.movies.aggregate(counting, allowDiskUse=True))[
@@ -392,7 +391,7 @@ def get_user(email):
     """
     # TODO: User Management
     # Retrieve the user document corresponding with the user's email.
-    return db.users.find_one({ "some_field": "some_value" })
+    return db.users.find_one({ "email": email })
 
 
 def add_user(name, email, hashedpw):
@@ -414,9 +413,9 @@ def add_user(name, email, hashedpw):
         # TODO: Durable Writes
         # Use a more durable Write Concern for this operation.
         db.users.insert_one({
-            "name": "mongo",
-            "email": "mongo@mongodb.com",
-            "password": "flibbertypazzle"
+            "name": name,
+            "email": email,
+            "password": hashedpw
         })
         return {"success": True}
     except DuplicateKeyError:
@@ -435,8 +434,9 @@ def login_user(email, jwt):
         # Use an UPSERT statement to update the "jwt" field in the document,
         # matching the "user_id" field with the email passed to this function.
         db.sessions.update_one(
-            { "some_field": "some_value" },
-            { "$set": { "some_other_field": "some_other_value" } }
+            { "user_id": email },
+            { "$set": { "jwt": jwt } },
+            upsert=True
         )
         return {"success": True}
     except Exception as e:
@@ -453,7 +453,7 @@ def logout_user(email):
     try:
         # TODO: User Management
         # Delete the document in the `sessions` collection matching the email.
-        db.sessions.delete_one({ "some_field": "some_value" })
+        db.sessions.delete_one({ "user_id": email })
         return {"success": True}
     except Exception as e:
         return {"error": e}
@@ -468,7 +468,7 @@ def get_user_session(email):
     try:
         # TODO: User Management
         # Retrieve the session document corresponding with the user's email.
-        return db.sessions.find_one({ "some_field": "some_value" })
+        return db.sessions.find_one({ "user_id": email })
     except Exception as e:
         return {"error": e}
 
@@ -481,8 +481,8 @@ def delete_user(email):
     try:
         # TODO: User Management
         # Delete the corresponding documents from `users` and `sessions`.
-        db.sessions.delete_one({ "some_field": "some_value" })
-        db.users.delete_one({ "some_field": "some_value" })
+        db.sessions.delete_one({ "user_id": email })
+        db.users.delete_one({ "email": email })
         if get_user(email) is None:
             return {"success": True}
         else:
